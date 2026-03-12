@@ -20,7 +20,7 @@ The plugin has been updated so that watched component changes made during Play M
 
 The original implementation used the obsolete `EditorApplication.playmodeStateChanged` event.
 
-This was replaced with the Unity 2022.3 compatible `EditorApplication.playModeStateChanged` callback in [`PersistentComponents()`](Editor/PersistentComponents.cs:31) and handled through [`OnPlayModeChanged()`](Editor/PersistentComponents.cs:40).
+This was replaced with the Unity 2022.3 compatible `EditorApplication.playModeStateChanged` callback in [`PersistentComponents()`](PersistentComponents/Editor/PersistentComponents.cs:31) and handled through [`OnPlayModeChanged()`](PersistentComponents/Editor/PersistentComponents.cs:40).
 
 ### 2. Search bar GUI failure
 
@@ -28,7 +28,7 @@ The editor window search bar relied on old built-in style names that may not exi
 
 This caused null GUI styles, which then triggered layout errors and exceptions in the editor window.
 
-The search bar was updated in [`SearchUtils.BeginSearchbar()`](Editor/Utils/SearchUtils.cs:35) to:
+The search bar was updated in [`SearchUtils.BeginSearchbar()`](PersistentComponents/Editor/Utils/SearchUtils.cs:35) to:
 
 - try the newer toolbar style names first
 - fall back to the legacy misspelled names if needed
@@ -42,12 +42,12 @@ That approach is not stable enough for Unity 2022.3 editor lifecycle behavior, e
 
 The persistence system was migrated to use `GlobalObjectId` in:
 
-- [`GetComponentId()`](Editor/PersistentComponents.cs:257)
-- [`GetComponentById()`](Editor/PersistentComponents.cs:265)
-- [`WatchComponent()`](Editor/PersistentComponentsStateSaving.cs:9)
-- [`RecallComponents()`](Editor/PersistentComponentsStayPersistent.cs:25)
+- [`GetComponentId()`](PersistentComponents/Editor/PersistentComponents.cs:257)
+- [`GetComponentById()`](PersistentComponents/Editor/PersistentComponents.cs:265)
+- [`WatchComponent()`](PersistentComponents/Editor/PersistentComponentsStateSaving.cs:9)
+- [`RecallComponents()`](PersistentComponents/Editor/PersistentComponentsStayPersistent.cs:25)
 
-The saved asset format in [`PersistencyData`](Editor/PersistencyData.cs:7) was also changed from `int[]` to `string[]` so stable object identifiers can be stored.
+The saved asset format in [`PersistencyData`](PersistentComponents/Editor/PersistencyData.cs:7) was also changed from `int[]` to `string[]` so stable object identifiers can be stored.
 
 ### 4. Runtime changes were not continuously captured
 
@@ -65,16 +65,16 @@ Watched components are now tracked with stable string IDs instead of instance ID
 
 Relevant changes:
 
-- [`WatchedComponents`](Editor/PersistentComponents.cs:21)
-- [`components`](Editor/PersistentComponents.cs:23)
-- [`serializedObjects`](Editor/PersistentComponents.cs:24)
-- [`persistentComponents`](Editor/PersistencyData.cs:9)
+- [`WatchedComponents`](PersistentComponents/Editor/PersistentComponents.cs:21)
+- [`components`](PersistentComponents/Editor/PersistentComponents.cs:23)
+- [`serializedObjects`](PersistentComponents/Editor/PersistentComponents.cs:24)
+- [`persistentComponents`](PersistentComponents/Editor/PersistencyData.cs:9)
 
 ### Real target object write-back
 
 When leaving Play Mode, the plugin now writes snapshot data back onto the real target object through a fresh `SerializedObject`, instead of relying on the old cached object alone.
 
-This logic is implemented in [`ApplyModifiedProperties()`](Editor/PersistentComponents.cs:57).
+This logic is implemented in [`ApplyModifiedProperties()`](PersistentComponents/Editor/PersistentComponents.cs:57).
 
 The write-back flow now:
 
@@ -90,10 +90,10 @@ Some components do not use the fallback custom inspector path, so inspector chan
 
 To support components such as `VRCPhysBone`, a runtime polling mechanism was added:
 
-- [`EditorApplication.update`](Editor/PersistentComponents.cs:35)
-- [`OnEditorUpdate()`](Editor/PersistentComponents.cs:154)
-- [`PollWatchedComponents()`](Editor/PersistentComponents.cs:166)
-- [`BuildSerializedHash()`](Editor/PersistentComponents.cs:194)
+- [`EditorApplication.update`](PersistentComponents/Editor/PersistentComponents.cs:35)
+- [`OnEditorUpdate()`](PersistentComponents/Editor/PersistentComponents.cs:154)
+- [`PollWatchedComponents()`](PersistentComponents/Editor/PersistentComponents.cs:166)
+- [`BuildSerializedHash()`](PersistentComponents/Editor/PersistentComponents.cs:194)
 
 During Play Mode, watched components are periodically checked for serialized data changes. If a change is detected, the snapshot is refreshed automatically.
 
@@ -103,29 +103,29 @@ This is the key fix that restored the main functionality for components using th
 
 For components that do go through the fallback custom inspector, the plugin still updates snapshots immediately when inspector values change.
 
-This behavior is handled in [`CustomInspector.OnInspectorGUI()`](Editor/CustomInspector.cs:19).
+This behavior is handled in [`CustomInspector.OnInspectorGUI()`](PersistentComponents/Editor/CustomInspector.cs:19).
 
 ## Additional Stability Improvements
 
 ### Safer hierarchy drawing
 
-[`HierarchyItemCallback()`](Editor/PersistentComponents.cs:276) now includes null checks so stale entries do not break hierarchy rendering.
+[`HierarchyItemCallback()`](PersistentComponents/Editor/PersistentComponents.cs:276) now includes null checks so stale entries do not break hierarchy rendering.
 
 ### Safer persistency asset lookup
 
-[`PersistencyData.GetAssetLocation()`](Editor/PersistencyData.cs:27) now handles missing asset search results more safely and falls back to a default path when needed.
+[`PersistencyData.GetAssetLocation()`](PersistentComponents/Editor/PersistencyData.cs:27) now handles missing asset search results more safely and falls back to a default path when needed.
 
 ## Files Modified
 
 The following files were updated:
 
-- [`Editor/PersistentComponents.cs`](Editor/PersistentComponents.cs)
-- [`Editor/PersistentComponentsStateSaving.cs`](Editor/PersistentComponentsStateSaving.cs)
-- [`Editor/PersistentComponentsStayPersistent.cs`](Editor/PersistentComponentsStayPersistent.cs)
-- [`Editor/PersistentComponentsWindow.cs`](Editor/PersistentComponentsWindow.cs)
-- [`Editor/PersistencyData.cs`](Editor/PersistencyData.cs)
-- [`Editor/Utils/SearchUtils.cs`](Editor/Utils/SearchUtils.cs)
-- [`Editor/CustomInspector.cs`](Editor/CustomInspector.cs)
+- [`PersistentComponents/Editor/PersistentComponents.cs`](PersistentComponents/Editor/PersistentComponents.cs)
+- [`PersistentComponents/Editor/PersistentComponentsStateSaving.cs`](PersistentComponents/Editor/PersistentComponentsStateSaving.cs)
+- [`PersistentComponents/Editor/PersistentComponentsStayPersistent.cs`](PersistentComponents/Editor/PersistentComponentsStayPersistent.cs)
+- [`PersistentComponents/Editor/PersistentComponentsWindow.cs`](PersistentComponents/Editor/PersistentComponentsWindow.cs)
+- [`PersistentComponents/Editor/PersistencyData.cs`](PersistentComponents/Editor/PersistencyData.cs)
+- [`PersistentComponents/Editor/Utils/SearchUtils.cs`](PersistentComponents/Editor/Utils/SearchUtils.cs)
+- [`PersistentComponents/Editor/CustomInspector.cs`](PersistentComponents/Editor/CustomInspector.cs)
 
 ## Result
 
