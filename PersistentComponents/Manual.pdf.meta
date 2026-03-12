@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 13ebda4ff1da94c4fab45ca4081bb213
+timeCreated: 1475596881
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 59009
+  packageName: Persistent Components
+  packageVersion: 1.2.0
+  assetPath: Assets/BrokenVector/PersistentComponents/Manual.pdf
+  uploadId: 151217

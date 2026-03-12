@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e6e3a79a935748f4fbdee188ce692e28
+timeCreated: 1476353192
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 59009
+  packageName: Persistent Components
+  packageVersion: 1.2.0
+  assetPath: Assets/BrokenVector/PersistentComponents/Editor/WatchedComponents.asset
+  uploadId: 151217

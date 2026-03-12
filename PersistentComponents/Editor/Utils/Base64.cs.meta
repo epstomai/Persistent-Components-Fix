@@ -1,0 +1,27 @@
+fileFormatVersion: 2
+guid: 736d51866606de94daf836af6b86e00d
+labels:
+- Code
+- Editor
+- Extension
+- C#
+- Source
+- EditorWindow
+- Base64
+timeCreated: 1447500456
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 59009
+  packageName: Persistent Components
+  packageVersion: 1.2.0
+  assetPath: Assets/BrokenVector/PersistentComponents/Editor/Utils/Base64.cs
+  uploadId: 151217
