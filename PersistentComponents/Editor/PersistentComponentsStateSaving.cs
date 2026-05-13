@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 
@@ -8,19 +8,32 @@ namespace BrokenVector.PersistentComponents
     {
         public void WatchComponent(Component comp)
         {
-            if (comp == null || IsComponentWatched(comp))
-                return;
+            if (WatchComponentInternal(comp))
+            {
+                RepaintPersistentComponentViews();
+            }
+        }
 
-            var componentId = GetComponentId(comp);
-            if (string.IsNullOrEmpty(componentId))
-                return;
+        private bool WatchComponentInternal(Component comp)
+        {
+            if (comp == null)
+                return false;
+
+            var componentId = GetCachedComponentId(comp);
+            if (string.IsNullOrEmpty(componentId) || IsComponentWatched(comp, componentId))
+                return false;
 
             if (!components.ContainsKey(comp.gameObject))
                 components[comp.gameObject] = new List<string>();
             components[comp.gameObject].Add(componentId);
 
-            UpdateComponent(comp);
+            SaveComponentSnapshotWithoutHash(comp, componentId);
 
+            return true;
+        }
+
+        private void RepaintPersistentComponentViews()
+        {
             if (PersistentComponentsWindow.Instance != null)
                 PersistentComponentsWindow.Instance.Repaint();
 
@@ -29,12 +42,20 @@ namespace BrokenVector.PersistentComponents
 
         public void ForgetComponent(Component comp)
         {
-            if (comp == null || !components.ContainsKey(comp.gameObject))
-                return;
+            if (ForgetComponentInternal(comp))
+            {
+                RepaintPersistentComponentViews();
+            }
+        }
 
-            var componentId = GetComponentId(comp);
-            if (string.IsNullOrEmpty(componentId))
-                return;
+        private bool ForgetComponentInternal(Component comp)
+        {
+            if (comp == null)
+                return false;
+
+            var componentId = GetCachedComponentId(comp);
+            if (string.IsNullOrEmpty(componentId) || !components.ContainsKey(comp.gameObject))
+                return false;
 
             components[comp.gameObject].Remove(componentId);
             if (components[comp.gameObject].Count == 0)
@@ -42,22 +63,28 @@ namespace BrokenVector.PersistentComponents
 
             serializedObjects.Remove(componentId);
             serializedHashes.Remove(componentId);
+            ClearCachedComponentId(comp);
 
-            if (PersistentComponentsWindow.Instance != null)
-                PersistentComponentsWindow.Instance.Repaint();
-
-            EditorApplication.RepaintHierarchyWindow();
+            return true;
         }
 
         public void WatchComponents(params Component[] comps)
         {
+            bool changed = false;
             foreach (var c in comps)
-                WatchComponent(c);
+                changed |= WatchComponentInternal(c);
+
+            if (changed)
+                RepaintPersistentComponentViews();
         }
         public void ForgetComponents(params Component[] comps)
         {
+            bool changed = false;
             foreach (var c in comps)
-                ForgetComponent(c);
+                changed |= ForgetComponentInternal(c);
+
+            if (changed)
+                RepaintPersistentComponentViews();
         }
         public void ForgetEveryComponent()
         {
@@ -78,10 +105,8 @@ namespace BrokenVector.PersistentComponents
             if (comp == null)
                 return false;
 
-            var componentId = GetComponentId(comp);
-            return !string.IsNullOrEmpty(componentId)
-                && components.ContainsKey(comp.gameObject)
-                && components[comp.gameObject].Contains(componentId);
+            var componentId = GetCachedComponentId(comp);
+            return IsComponentWatched(comp, componentId);
         }
     }
 }

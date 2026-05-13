@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 
@@ -22,10 +22,11 @@ namespace BrokenVector.PersistentComponents
 
         private Dictionary<GameObject, List<string>> components = new Dictionary<GameObject, List<string>>();
         private Dictionary<string, SerializedObject> serializedObjects = new Dictionary<string, SerializedObject>();
-        private Dictionary<string, string> serializedHashes = new Dictionary<string, string>();
+        private Dictionary<string, int> serializedHashes = new Dictionary<string, int>();
+        private Dictionary<int, string> componentIdCache = new Dictionary<int, string>();
         private double nextPollingTime;
 
-        private const double POLLING_INTERVAL = 0.25d;
+        private const double POLLING_INTERVAL = 1.0d;
 
         public PersistentComponents()
         {
@@ -38,9 +39,15 @@ namespace BrokenVector.PersistentComponents
 
         public void OnPlayModeChanged(PlayModeStateChange state)
         {
+            componentIdCache.Clear();
+
             if (state == PlayModeStateChange.EnteredPlayMode)
             {
-                UpdateAllComponents();
+                UpdateAllComponents(false);
+            }
+            else if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                UpdateAllComponents(false);
             }
             else if (state == PlayModeStateChange.EnteredEditMode)
             {
@@ -93,83 +100,143 @@ namespace BrokenVector.PersistentComponents
             foreach(var k in toRemove)
             {
                 serializedObjects.Remove(k);
+                serializedHashes.Remove(k);
             }
         }
 
         public void UpdateComponent(Component comp)
         {
-            if (!IsComponentWatched(comp))
+            if (comp == null)
                 return;
 
-            var objectId = GetComponentId(comp);
-            if (string.IsNullOrEmpty(objectId))
+            var objectId = GetCachedComponentId(comp);
+            if (string.IsNullOrEmpty(objectId) || !IsComponentWatched(comp, objectId))
                 return;
 
-            if (!serializedObjects.ContainsKey(objectId))
-            {
-                serializedObjects.Add(objectId, new SerializedObject(comp));
-            }
-
-            var clone = new SerializedObject(comp);
-            var original = serializedObjects[objectId];
-
-            SerializedProperty sp = clone.GetIterator();
-            while (sp.NextVisible(true))
-            {
-                original.CopyFromSerializedProperty(sp);
-            }
-            sp.Reset();
-
-            serializedHashes[objectId] = BuildSerializedHash(clone);
+            SaveComponentSnapshot(comp, objectId, null, 0, false);
         }
 
-        private static string GetPropertyValueForHash(SerializedProperty property)
+        private void SaveComponentSnapshot(Component comp, string objectId, SerializedObject sourceSerializedObject, int currentHash, bool hasCurrentHash)
         {
-            switch (property.propertyType)
+            if (comp == null || string.IsNullOrEmpty(objectId))
+                return;
+
+            var source = sourceSerializedObject ?? new SerializedObject(comp);
+            if (!serializedObjects.TryGetValue(objectId, out var snapshot) || snapshot == null || snapshot.targetObject == null)
             {
-                case SerializedPropertyType.Integer:
-                    return property.intValue.ToString();
-                case SerializedPropertyType.Boolean:
-                    return property.boolValue.ToString();
-                case SerializedPropertyType.Float:
-                    return property.floatValue.ToString();
-                case SerializedPropertyType.String:
-                    return property.stringValue;
-                case SerializedPropertyType.Enum:
-                    return property.enumValueIndex.ToString();
-                case SerializedPropertyType.ObjectReference:
-                    return property.objectReferenceValue != null ? property.objectReferenceValue.GetInstanceID().ToString() : "null";
-                case SerializedPropertyType.Vector2:
-                    return property.vector2Value.ToString();
-                case SerializedPropertyType.Vector3:
-                    return property.vector3Value.ToString();
-                case SerializedPropertyType.Vector4:
-                    return property.vector4Value.ToString();
-                case SerializedPropertyType.Color:
-                    return property.colorValue.ToString();
-                case SerializedPropertyType.Rect:
-                    return property.rectValue.ToString();
-                case SerializedPropertyType.Bounds:
-                    return property.boundsValue.ToString();
-                case SerializedPropertyType.Quaternion:
-                    return property.quaternionValue.eulerAngles.ToString();
-                case SerializedPropertyType.AnimationCurve:
-                    return property.animationCurveValue != null ? property.animationCurveValue.length.ToString() : "null";
-                case SerializedPropertyType.ExposedReference:
-                    return property.exposedReferenceValue != null ? property.exposedReferenceValue.GetInstanceID().ToString() : "null";
-                case SerializedPropertyType.Vector2Int:
-                    return property.vector2IntValue.ToString();
-                case SerializedPropertyType.Vector3Int:
-                    return property.vector3IntValue.ToString();
-                case SerializedPropertyType.RectInt:
-                    return property.rectIntValue.ToString();
-                case SerializedPropertyType.BoundsInt:
-                    return property.boundsIntValue.ToString();
-                case SerializedPropertyType.Hash128:
-                    return property.hash128Value.ToString();
-                default:
-                    return property.propertyType.ToString();
+                serializedObjects[objectId] = source;
             }
+            else
+            {
+                CopySerializedProperties(source, snapshot);
+            }
+
+            serializedHashes[objectId] = hasCurrentHash ? currentHash : BuildSerializedHash(source);
+        }
+
+        private void SaveComponentSnapshotWithoutHash(Component comp, string objectId)
+        {
+            if (comp == null || string.IsNullOrEmpty(objectId))
+                return;
+
+            serializedObjects[objectId] = new SerializedObject(comp);
+            serializedHashes.Remove(objectId);
+        }
+
+        private static void CopySerializedProperties(SerializedObject source, SerializedObject target)
+        {
+            SerializedProperty sp = source.GetIterator();
+            while (sp.NextVisible(true))
+            {
+                target.CopyFromSerializedProperty(sp);
+            }
+            sp.Reset();
+        }
+
+        private static int GetPropertyValueHash(SerializedProperty property)
+        {
+            unchecked
+            {
+                switch (property.propertyType)
+                {
+                    case SerializedPropertyType.Integer:
+                        return property.intValue;
+                    case SerializedPropertyType.Boolean:
+                        return property.boolValue ? 1 : 0;
+                    case SerializedPropertyType.Float:
+                        return property.floatValue.GetHashCode();
+                    case SerializedPropertyType.String:
+                        return property.stringValue != null ? property.stringValue.GetHashCode() : 0;
+                    case SerializedPropertyType.Enum:
+                        return property.enumValueIndex;
+                    case SerializedPropertyType.ObjectReference:
+                        return property.objectReferenceValue != null ? property.objectReferenceValue.GetInstanceID() : 0;
+                    case SerializedPropertyType.Vector2:
+                        return property.vector2Value.GetHashCode();
+                    case SerializedPropertyType.Vector3:
+                        return property.vector3Value.GetHashCode();
+                    case SerializedPropertyType.Vector4:
+                        return property.vector4Value.GetHashCode();
+                    case SerializedPropertyType.Color:
+                        return property.colorValue.GetHashCode();
+                    case SerializedPropertyType.Rect:
+                        return property.rectValue.GetHashCode();
+                    case SerializedPropertyType.Bounds:
+                        return property.boundsValue.GetHashCode();
+                    case SerializedPropertyType.Quaternion:
+                        return property.quaternionValue.eulerAngles.GetHashCode();
+                    case SerializedPropertyType.AnimationCurve:
+                        return property.animationCurveValue != null ? property.animationCurveValue.length : 0;
+                    case SerializedPropertyType.ExposedReference:
+                        return property.exposedReferenceValue != null ? property.exposedReferenceValue.GetInstanceID() : 0;
+                    case SerializedPropertyType.Vector2Int:
+                        return property.vector2IntValue.GetHashCode();
+                    case SerializedPropertyType.Vector3Int:
+                        return property.vector3IntValue.GetHashCode();
+                    case SerializedPropertyType.RectInt:
+                        return property.rectIntValue.GetHashCode();
+                    case SerializedPropertyType.BoundsInt:
+                        return property.boundsIntValue.GetHashCode();
+                    case SerializedPropertyType.Hash128:
+                        return property.hash128Value.GetHashCode();
+                    default:
+                        return (int)property.propertyType;
+                }
+            }
+        }
+
+        private string GetCachedComponentId(Component comp)
+        {
+            if (comp == null)
+                return null;
+
+            int instanceId = comp.GetInstanceID();
+            if (componentIdCache.TryGetValue(instanceId, out var componentId))
+                return componentId;
+
+            componentId = GetComponentId(comp);
+            if (!string.IsNullOrEmpty(componentId))
+            {
+                componentIdCache[instanceId] = componentId;
+            }
+
+            return componentId;
+        }
+
+        private void ClearCachedComponentId(Component comp)
+        {
+            if (comp == null)
+                return;
+
+            componentIdCache.Remove(comp.GetInstanceID());
+        }
+
+        private bool IsComponentWatched(Component comp, string componentId)
+        {
+            return comp != null
+                && !string.IsNullOrEmpty(componentId)
+                && components.ContainsKey(comp.gameObject)
+                && components[comp.gameObject].Contains(componentId);
         }
         public void UpdateComponents(params Component[] comps)
         {
@@ -178,10 +245,26 @@ namespace BrokenVector.PersistentComponents
         }
         public void UpdateAllComponents()
         {
+            UpdateAllComponents(true);
+        }
+
+        private void UpdateAllComponents(bool updateHash)
+        {
             foreach (var go in components)
                 foreach(var componentId in go.Value)
                 {
-                    UpdateComponent(GetComponentById(componentId));
+                    var component = GetComponentById(componentId);
+                    if (component == null)
+                        continue;
+
+                    if (updateHash)
+                    {
+                        UpdateComponent(component);
+                    }
+                    else
+                    {
+                        SaveComponentSnapshotWithoutHash(component, componentId);
+                    }
                 }
         }
 
@@ -207,42 +290,40 @@ namespace BrokenVector.PersistentComponents
                     if (component == null)
                         continue;
 
+                    if (!serializedHashes.TryGetValue(componentId, out var previousHash))
+                        continue;
+
                     var currentSerializedObject = new SerializedObject(component);
                     var currentHash = BuildSerializedHash(currentSerializedObject);
 
-                    if (!serializedHashes.TryGetValue(componentId, out var previousHash))
-                    {
-                        serializedHashes[componentId] = currentHash;
-                        continue;
-                    }
-
                     if (currentHash != previousHash)
                     {
-                        UpdateComponent(component);
+                        SaveComponentSnapshot(component, componentId, currentSerializedObject, currentHash, true);
                     }
                 }
             }
         }
 
-        private static string BuildSerializedHash(SerializedObject serializedObject)
+        private static int BuildSerializedHash(SerializedObject serializedObject)
         {
             if (serializedObject == null)
-                return string.Empty;
+                return 0;
 
             var iterator = serializedObject.GetIterator();
-            System.Text.StringBuilder builder = new System.Text.StringBuilder();
-            while (iterator.NextVisible(true))
+            unchecked
             {
-                if (iterator.propertyPath == "m_Script")
-                    continue;
+                int hash = 17;
+                while (iterator.NextVisible(true))
+                {
+                    if (iterator.propertyPath == "m_Script")
+                        continue;
 
-                builder.Append(iterator.propertyPath);
-                builder.Append('=');
-                builder.Append(GetPropertyValueForHash(iterator));
-                builder.Append(';');
+                    hash = hash * 31 + iterator.propertyPath.GetHashCode();
+                    hash = hash * 31 + GetPropertyValueHash(iterator);
+                }
+
+                return hash;
             }
-
-            return builder.ToString();
         }
 
         internal static string GetComponentId(Component comp)
